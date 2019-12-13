@@ -1,6 +1,7 @@
 .Phony: all re fclean clean
 NAME = computer
-SOURCES = main.ml
+SOURCES =	token.ml	\
+			main.ml
 
 CAMLC = ocamlc
 CAMLOPT = ocamlopt

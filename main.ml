@@ -1,3 +1,5 @@
+open Printf
+
 let isNumber = function '0' .. '9' -> true | _ -> false
 let isOp = function '*' | '+' | '-' | '=' | '^' -> true | _ -> false
 
@@ -15,7 +17,7 @@ let parseError str nd =
         else " " ^ loop (n - 1)
     in
     print_endline ((loop (nd - 1)) ^ "^");
-    exit 0
+    exit 1
 
 let split str =
     let rec loop str st nd par_nb =
@@ -29,6 +31,7 @@ let split str =
             | (_, _ )-> loop str st (nd + 1) par_nb
     in loop str 0 0 0
 
+(* PARSING *)
 
 let typeMe c =
     if isNumber c = true then 1
@@ -46,15 +49,15 @@ let catchSyntaxError str =
         else if n1 = '.' && isNumber str.[n] = false then parseError str n
         else if str.[n] = n1 && typeMe str.[n] <> 5 && isNumber str.[n] = false then parseError str n
         else match typeMe str.[n] with
-        | 6 -> if x = true then parseError str n else loop (n + 1) str.[n] false false true
+        | 6 -> if x = true then parseError str n else loop (n + 1) str.[n] false true true
         | 5 -> (if str.[n] = ')' && op = true then parseError str n
-                else if str.[n] = '(' && op = false then parseError str n
+                else if str.[n] = '(' && op = false && n <> 0 then parseError str n
                 else loop (n + 1) str.[n] op nb x)
         | 4 -> parseError str n
         | 3 -> loop (n + 1) str.[n] op nb x
         | 2 -> if op = true then parseError str n else loop (n + 1) str.[n] true false false
         | 1 -> if nb = true && typeMe n1 <> 1 then parseError str n else loop (n + 1) str.[n] false true false
-        | _ -> parseError str n 
+        | _ -> parseError str n
     in loop 0 'W' false false false
 
 let catchEq str =
@@ -77,7 +80,7 @@ let catchPower str =
 
 let catchX str =
     let rec loop n =
-        if n = String.length str then (print_endline ("\027[31mCalc Error:\027[0m no X founded\n" ^ str); exit 0)
+        if n = String.length str then (print_endline ("\027[31mCalc Error:\027[0m no X founded\n" ^ str); exit 1)
         else match str.[n] with
             | 'X' | 'x' -> ()
             | _ -> loop (n + 1)
@@ -89,13 +92,100 @@ let catchError str =
     catchPower str;
     catchX str
 
+
+let nblen str ns =
+    let rec loop n = 
+        if n = String.length str then n - ns
+        else match (isNumber str.[n], str.[n]) with
+        | (true, _) -> loop (n + 1)
+        | (false, '.') -> loop (n + 1)
+        | (false, 'x') | (false, 'X') -> loop (n + 1)
+        | (false, _) -> n - ns
+    in loop ns
+
+let createNb str ns =
+    let rec loop n =
+        if n = String.length str then new Token.token (float_of_string (String.sub str ns (n - ns))) 0 'X'
+        else match (isNumber str.[n], str.[n]) with
+        | (true, _) -> loop (n + 1)
+        | (false, '.') -> loop (n + 1)
+        | (false, 'x') | (false, 'X') ->
+            if n = ns then new Token.token 1. 1 'X'
+            else new Token.token (float_of_string (String.sub str ns (n - ns))) 1 'X'
+        | (false, _) -> new Token.token (float_of_string (String.sub str ns (n - ns))) 0 'X'
+    in loop ns
+
+(* DEVELOPPEMENT *)
+(*    nb  X   sign    *)
+(* [[(u8, u8, char)]] *)
+let transformMe str =
+    let rec loop n =
+        if n >= String.length str then []
+        else match (isNumber str.[n], isOp str.[n], str.[n]) with
+            | (true, _, _) -> [createNb str n] @ loop (n + nblen str n )
+            | (false, _, 'X') | (false, _, 'x') -> [createNb str n] @ loop (n + nblen str n)
+            | (_, true, _) -> if str.[n] <> '=' then [new Token.token 0. 0 str.[n]] @ loop (n + 1) else loop (n + 1)
+            | (_, false, '(')  | (_, false, ')') -> [new Token.token 0. 0 str.[n]] @ loop (n + 1)
+            | (false, _, _) -> loop (n + 1)
+    in loop 0
+
+let rec delNb str =
+    let rec loop n =
+        if n = String.length str then []
+        else match (isOp str.[n], str.[n]) with
+            | _ -> loop (n + 1)
+    in loop 0
+
+let delLast lst =
+    List.rev (List.tl (List.rev lst))
+
+let rec print_list lst = match lst with
+    | [] -> ()
+    | (x::xs) -> (print_string "PRINT: "; x#display; print_list xs)
+
+let poland lst =
+    print_list lst;
+    let rec loop tail op = match tail with
+            | [] -> List.rev op
+            | (x::xs) -> (match x#getOp with
+                | 'X' -> [x] @ loop xs op
+                | '(' | '^' -> loop xs (op @ [x])
+                | ')' -> (if List.length op = 0 then loop xs []
+                        else ( let last = List.nth op (List.length op - 1) in
+                        if last#getOp <> '(' then [last] @ loop ([x] @ xs) (delLast op)
+                        else loop xs (delLast op)))
+                | _ -> ( if List.length op = 0 then loop xs [x]
+                        else ( let last = List.nth op (List.length op - 1) in
+                        if last#getPrecedence > x#getPrecedence then [last] @ loop ([x] @ xs) (delLast op)
+                            else loop xs (op @ [x]))))
+        in loop lst []
+
+let makeMeSimple str =
+    let lst = poland (transformMe str) in
+    let rec loop tail = match tail with
+            | [] -> ()
+            | (x::xs) -> (x#display; loop xs)
+    in loop lst
+    (*
+    addMe str;
+    subMe str;*)
+
+let devIt lst =
+    let rec loop tail =
+        match tail with
+            | [] -> ()
+            | (x::xs) -> (makeMeSimple x; loop xs)
+    in loop lst
+
 let createList str =
     catchError str;
-    let lst = split str in
-    List.iter print_endline lst
+    makeMeSimple str
+    (*let lst = split str in
+    List.iter print_endline lst;
+    devIt lst*)
 
 
 
 let () =
-    if Array.length Sys.argv <> 2 then print_endline "Wrong nb of Arguments"
+    if Array.length Sys.argv <> 2 then (print_endline "Wrong nb of Arguments"; exit 1)
     else createList Sys.argv.(1)
