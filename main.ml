@@ -74,6 +74,7 @@ let catchPower str =
         if n = String.length str then ()
         else match str.[n] with
             | '^' -> if pow = true then parseError str n else loop (n + 1) true
+            | 'X' | 'x' -> if pow = true then parseError str n else loop (n + 1) pow
             | '*' | '+' | '-' | '=' -> loop (n + 1) false
             | _ -> loop (n + 1) pow
     in loop 0 false
@@ -118,16 +119,25 @@ let createNb str ns =
 (* DEVELOPPEMENT *)
 (*    nb  X   sign    *)
 (* [[(u8, u8, char)]] *)
+let inverse op = match op with
+    | '-' -> '+'
+    | '+' -> '-'
+    | _ -> op
+
 let transformMe str =
-    let rec loop n =
+    let rec loop n par equ =
         if n >= String.length str then []
         else match (isNumber str.[n], isOp str.[n], str.[n]) with
-            | (true, _, _) -> [createNb str n] @ loop (n + nblen str n )
-            | (false, _, 'X') | (false, _, 'x') -> [createNb str n] @ loop (n + nblen str n)
-            | (_, true, _) -> if str.[n] <> '=' then [new Token.token 0. 0 str.[n]] @ loop (n + 1) else loop (n + 1)
-            | (_, false, '(')  | (_, false, ')') -> [new Token.token 0. 0 str.[n]] @ loop (n + 1)
-            | (false, _, _) -> loop (n + 1)
-    in loop 0
+            | (true, _, _) -> [createNb str n] @ loop (n + nblen str n) par equ
+            | (false, _, 'X') | (false, _, 'x') -> [createNb str n] @ loop (n + nblen str n) par equ
+            | (_, true, '=') -> [new Token.token 0. 0 '-'] @ loop (n + 1) par true
+            | (_, true, _) -> (
+                if par = 0 && equ = true then [new Token.token 0. 0 (inverse str.[n])] @ loop (n + 1) par equ
+                else [new Token.token 0. 0 str.[n]] @ loop (n + 1) par equ)
+            | (_, false, '(') -> [new Token.token 0. 0 str.[n]] @ loop (n + 1) (par + 1) equ
+            | (_, false, ')') -> [new Token.token 0. 0 str.[n]] @ loop (n + 1) (par - 1) equ
+            | (false, _, _) -> loop (n + 1) par equ
+    in loop 0 0 false
 
 let rec delNb str =
     let rec loop n =
@@ -141,10 +151,9 @@ let delLast lst =
 
 let rec print_list lst = match lst with
     | [] -> ()
-    | (x::xs) -> (print_string "PRINT: "; x#display; print_list xs)
+    | (x::xs) -> (x#display; print_list xs)
 
 let poland lst =
-    print_list lst;
     let rec loop tail op = match tail with
             | [] -> List.rev op
             | (x::xs) -> (match x#getOp with
@@ -156,12 +165,52 @@ let poland lst =
                         else loop xs (delLast op)))
                 | _ -> ( if List.length op = 0 then loop xs [x]
                         else ( let last = List.nth op (List.length op - 1) in
-                        if last#getPrecedence > x#getPrecedence then [last] @ loop ([x] @ xs) (delLast op)
+                        if x#getPrecedence <= last#getPrecedence then [last] @ loop ([x] @ xs) (delLast op)
                             else loop xs (op @ [x]))))
         in loop lst []
 
+let isCompatible x1 x2 op =
+    if x1#getOp = 'X' && x2#getOp = 'X' && op#getOp <> 'X' then (match op#getOp with
+                | '*' | '^' | '/' -> true
+                | '+' | '-' -> (if x1#getExpo = x2#getExpo then true else false)
+                | _ -> false
+                )
+    else false
+
+let makeOp lst n =
+    let x1 = List.nth lst n in
+    let x2 = List.nth lst (n + 1) in
+    let op = List.nth lst (n + 2) in
+    let ret = match op#getOp with
+        | '+' -> x1#add x2
+        | '-' -> x1#sub x2
+        | '*' -> x1#mult x2
+        | '/' -> x1#div x2
+        | '^' -> x1#pow x2
+        | _ -> x1#add x2
+    in
+    printf "PRINT:";
+    ret#display;
+    printf "\n";
+    let rec loop tail n1 = match (tail, n1) with
+        | ([], _) -> []
+        | ((x::xs), 0) | ((x::xs), -1) -> loop xs (n1 - 1)
+        | ((x::xs), -2) -> [ret] @ xs
+        | ((x::xs), _) -> [x] @ loop xs (n1 - 1)
+    in loop lst n
+
+let rec reduce lst =
+    print_list lst; print_char '\n';
+    let rec loop tail n = match tail with
+        | [] -> lst
+        | (x::x1::x2::xs) -> (
+            if isCompatible x x1 x2 = true then reduce (makeOp lst n)
+            else loop ([x1] @ [x2] @ xs) (n + 1))
+        | _ -> lst
+    in loop lst 0
+
 let makeMeSimple str =
-    let lst = poland (transformMe str) in
+    let lst = reduce (poland (transformMe str)) in
     let rec loop tail = match tail with
             | [] -> ()
             | (x::xs) -> (x#display; loop xs)

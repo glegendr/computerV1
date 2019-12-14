@@ -1,3 +1,5 @@
+open Printf
+
 class token nb expo op =
     object
         val _nb:float = nb
@@ -20,20 +22,20 @@ class token nb expo op =
         method getPrecedence = _precedence
         method getAssociativity = _associativity
 
-        method add (number:token) = {<_nb = _nb +. number#getNb; _expo = _expo; _op = _op; _precedence = _precedence; _associativity = _associativity>}
-        method sub (number:token) = {<_nb = _nb -. number#getNb; _expo = _expo; _op = _op; _precedence = _precedence; _associativity = _associativity>}
-        method mult (number:token) =
-            if number#getExpo = _expo then {<_nb = _nb *. number#getNb; _expo = _expo * 2; _op = _op; _precedence = _precedence; _associativity = _associativity>}
-            else {<_nb = _nb *. number#getNb; _expo = max _expo number#getExpo; _op = _op; _precedence = _precedence; _associativity = _associativity>}
+        method add (number:token) = new token (_nb +. number#getNb) _expo _op
+        method sub (number:token) = new token (_nb -. number#getNb) _expo _op
+        method mult (number:token) = new token (_nb *. number#getNb) (_expo + number#getExpo) _op
+        method div (number:token) = new token (_nb /. number#getNb) (_expo - number#getExpo) _op
+        method pow (number:token) = new token (_nb +. number#getNb) (_expo + int_of_float number#getNb) _op
 
         method display = match _op with
             | 'X' -> (
                 print_float nb;
-                if expo > 0 then (print_endline ("X^" ^ string_of_int expo))
-                else print_char '\n' )
+                if expo > 0 then (print_string ("X^" ^ string_of_int expo ^ " "))
+                else print_char ' ' )
             | _ -> (
-                print_char _op;
+                print_char _op; print_char ' '(*;
                 print_string (" " ^ string_of_int _precedence ^ " ");
                 if _associativity = true then print_endline "Left"
-                else print_endline "Right" )
+                else print_endline "Right" *))
     end
