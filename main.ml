@@ -3,14 +3,15 @@ open Printf
 let isNumber = function '0' .. '9' -> true | _ -> false
 let isOp = function '*' | '+' | '-' | '=' | '^' -> true | _ -> false
 
-let parseError str nd =
+let parseError str nd err =
     print_string "\027[31mSyntax Error:\027[0m ";
-    print_endline (match (str.[nd], isNumber str.[nd]) with
-        | ('(', _) | (')', _) -> "bracket might be missmatched"
-        | ('+', _) | ('-', _) | ('=', _) | ('*', _) | ('^', _) -> "unexpected token"
-        | (' ', false) -> "two space in a row"
-        | (_, false) -> "unexpected character"
-        | (_, true) -> "unexpected token");
+    print_endline (match (str.[nd], isNumber str.[nd], err) with
+        | ('(', _, "") | (')', _, "") -> "bracket might be missmatched"
+        | ('+', _, "") | ('-', _, "") | ('=', _, "") | ('*', _, "") | ('^', _, "") -> "unexpected token"
+        | (' ', false, "") -> "two space in a row"
+        | (_, false, "") -> "unexpected character"
+        | (_, true, "") -> "unexpected token"
+        | _ -> err);
     print_endline str;
     let rec loop n =
         if n < 0 then ""
@@ -18,18 +19,6 @@ let parseError str nd =
     in
     print_endline ((loop (nd - 1)) ^ "^");
     exit 1
-
-let split str =
-    let rec loop str st nd par_nb =
-        if par_nb < 0 then parseError str (nd - 1)
-        else if nd = String.length str && par_nb <> 0 then parseError str (String.rindex str '(')
-        else if nd = String.length str then [String.sub str st (nd - st)]
-        else match (str.[nd], par_nb)  with
-            | ('(', _) -> loop str st (nd + 1) (par_nb + 1)
-            | (')', _) -> loop str st (nd + 1) (par_nb - 1)
-            | ('+', 0) | ('-', 0) | ('=', 0) -> [String.sub str st (nd - st)] @ loop str nd (nd  + 1) par_nb
-            | (_, _ )-> loop str st (nd + 1) par_nb
-    in loop str 0 0 0
 
 (* PARSING *)
 
@@ -44,40 +33,43 @@ let typeMe c =
 
 let catchSyntaxError str =
     let rec loop n n1 op nb x =
-        if n = String.length str && op = true then parseError str (n - 1)
+        if n = String.length str && op = true then parseError str (n - 1) ""
         else if n = String.length str then ()
-        else if n1 = '.' && isNumber str.[n] = false then parseError str n
-        else if str.[n] = n1 && typeMe str.[n] <> 5 && isNumber str.[n] = false then parseError str n
+        else if n1 = '.' && isNumber str.[n] = false then parseError str n ""
+        else if str.[n] = n1 && typeMe str.[n] <> 5 && isNumber str.[n] = false then parseError str n ""
         else match typeMe str.[n] with
-        | 6 -> if x = true then parseError str n else loop (n + 1) str.[n] false true true
-        | 5 -> (if str.[n] = ')' && op = true then parseError str n
-                else if str.[n] = '(' && op = false && n <> 0 then parseError str n
+        | 6 -> if x = true then parseError str n "" else loop (n + 1) str.[n] false true true
+        | 5 -> (if str.[n] = ')' && op = true then parseError str n ""
+                else if str.[n] = '(' && op = false && n <> 0 then parseError str n ""
                 else loop (n + 1) str.[n] op nb x)
-        | 4 -> parseError str n
+        | 4 -> parseError str n ""
         | 3 -> loop (n + 1) str.[n] op nb x
-        | 2 -> if op = true then parseError str n else loop (n + 1) str.[n] true false false
-        | 1 -> if nb = true && typeMe n1 <> 1 then parseError str n else loop (n + 1) str.[n] false true false
-        | _ -> parseError str n
+        | 2 -> if op = true then parseError str n "" else loop (n + 1) str.[n] true false false
+        | 1 -> if nb = true && typeMe n1 <> 1 then parseError str n "" else loop (n + 1) str.[n] false true false
+        | _ -> parseError str n ""
     in loop 0 'W' false false false
 
 let catchEq str =
-    let rec loop n neq =
+    let rec loop n neq els =
         if n = String.length str then ()
-        else match (str.[n], neq) with
-            | ('=', false) -> loop (n + 1) true
-            | ('=', true) -> parseError str n
-            | _ -> loop (n + 1) neq
-    in loop 0 false
+        else match (str.[n], neq, els) with
+            | ('=', false, true) -> loop (n + 1) true els
+            | ('=', false, false) ->  parseError str n ""
+            | ('=', true, _) -> parseError str n "multiple equal"
+            | _ -> loop (n + 1) neq true
+    in loop 0 false false
 
 let catchPower str =
-    let rec loop n pow =
+    let rec loop n pow br =
         if n = String.length str then ()
         else match str.[n] with
-            | '^' -> if pow = true then parseError str n else loop (n + 1) true
-            | 'X' | 'x' -> if pow = true then parseError str n else loop (n + 1) pow
-            | '*' | '+' | '-' | '=' -> loop (n + 1) false
-            | _ -> loop (n + 1) pow
-    in loop 0 false
+            | '^' -> if pow = true then parseError str n "multiple power" else loop (n + 1) true br
+            | 'X' | 'x' -> if pow = true then parseError str n "X in expodential" else loop (n + 1) pow br
+            | '*' | '+' | '-' | '=' -> if br > 0 then loop (n + 1) pow br else loop (n + 1) false br
+            | '(' -> loop (n + 1) pow (br + 1)
+            | ')' -> loop (n + 1) pow (br - 1)
+            | _ -> loop (n + 1) pow br
+    in loop 0 false 0
 
 let catchX str =
     let rec loop n =
@@ -87,10 +79,23 @@ let catchX str =
             | _ -> loop (n + 1)
     in loop 0
 
+let catchBracket str =
+    let rec loop n br =
+        if br < 0 then parseError str (n - 1) ""
+        else if n >= String.length str && br > 0 then parseError str (n - 1) "Non terminated bracket"
+        else if n >= String.length str then ()
+        else match str.[n] with
+        | '(' -> loop (n + 1) (br + 1)
+        | ')' -> loop (n + 1) (br - 1)
+        | '=' -> if br > 0 then parseError str (n - 1) ""
+        | _ -> loop (n + 1) br
+    in loop 0 0
+
 let catchError str =
     catchSyntaxError str;
     catchEq str;
     catchPower str;
+    catchBracket str;
     catchX str
 
 
@@ -172,7 +177,7 @@ let poland lst =
 let isCompatible x1 x2 op =
     if x1#getOp = 'X' && x2#getOp = 'X' && op#getOp <> 'X' then (match op#getOp with
                 | '*' | '^' | '/' -> true
-                | '+' | '-' -> (if x1#getExpo = x2#getExpo then true else false)
+                | '+' | '-' -> (if x1#getExpo = x2#getExpo || x1#getNb = 0. || x2#getNb = 0. then true else false)
                 | _ -> false
                 )
     else false
@@ -229,8 +234,7 @@ let devIt lst =
 let createList str =
     catchError str;
     makeMeSimple str
-    (*let lst = split str in
-    List.iter print_endline lst;
+    (*List.iter print_endline lst;
     devIt lst*)
 
 

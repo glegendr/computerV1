@@ -1,5 +1,10 @@
 open Printf
 
+let rec pow nb pw =
+    if pw = 1 then nb
+    else if pw = 0 then 1.
+    else nb *. (pow nb (pw - 1))
+
 class token nb expo op =
     object
         val _nb:float = nb
@@ -26,16 +31,14 @@ class token nb expo op =
         method sub (number:token) = new token (_nb -. number#getNb) _expo _op
         method mult (number:token) = new token (_nb *. number#getNb) (_expo + number#getExpo) _op
         method div (number:token) = new token (_nb /. number#getNb) (_expo - number#getExpo) _op
-        method pow (number:token) = new token (_nb +. number#getNb) (_expo + int_of_float number#getNb) _op
+        method pow (number:token) =
+            if _expo = 0 then new token (pow _nb (int_of_float number#getNb)) _expo _op
+            else new token _nb (_expo * (int_of_float number#getNb)) _op
 
         method display = match _op with
             | 'X' -> (
                 print_float nb;
                 if expo > 0 then (print_string ("X^" ^ string_of_int expo ^ " "))
                 else print_char ' ' )
-            | _ -> (
-                print_char _op; print_char ' '(*;
-                print_string (" " ^ string_of_int _precedence ^ " ");
-                if _associativity = true then print_endline "Left"
-                else print_endline "Right" *))
+            | _ -> (print_char _op; print_char ' ');
     end
