@@ -1,13 +1,13 @@
 open Printf
 
 let isNumber = function '0' .. '9' -> true | _ -> false
-let isOp = function '*' | '+' | '-' | '=' | '^' -> true | _ -> false
+let isOp = function '*' | '+' | '-' | '=' | '^' | '/' -> true | _ -> false
 
 let parseError str nd err =
     print_string "\027[31mSyntax Error:\027[0m ";
     print_endline (match (str.[nd], isNumber str.[nd], err) with
         | ('(', _, "") | (')', _, "") -> "bracket might be missmatched"
-        | ('+', _, "") | ('-', _, "") | ('=', _, "") | ('*', _, "") | ('^', _, "") -> "unexpected token"
+        | ('+', _, "") | ('-', _, "") | ('=', _, "") | ('*', _, "") | ('^', _, "") | ('/', _, "")-> "unexpected token"
         | (' ', false, "") -> "two space in a row"
         | (_, false, "") -> "unexpected character"
         | (_, true, "") -> "unexpected token"
@@ -40,11 +40,11 @@ let catchSyntaxError str =
         else match typeMe str.[n] with
         | 6 -> if x = true then parseError str n "" else loop (n + 1) str.[n] false true true
         | 5 -> (if str.[n] = ')' && op = true then parseError str n ""
-                else if str.[n] = '(' && op = false && n <> 0 then parseError str n ""
+                else if str.[n] = '(' && op = false && (op <> false && nb <> false && x <> false) then parseError str n ""
                 else loop (n + 1) str.[n] op nb x)
         | 4 -> parseError str n ""
         | 3 -> loop (n + 1) str.[n] op nb x
-        | 2 -> if op = true then parseError str n "" else loop (n + 1) str.[n] true false false
+        | 2 -> if op = true || (op = false && nb = false && x = false) then parseError str n "" else loop (n + 1) str.[n] true false false
         | 1 -> if nb = true && typeMe n1 <> 1 then parseError str n "" else loop (n + 1) str.[n] false true false
         | _ -> parseError str n ""
     in loop 0 'W' false false false
@@ -59,17 +59,36 @@ let catchEq str =
             | _ -> loop (n + 1) neq true
     in loop 0 false false
 
+let befBracket str n c =
+    let rec loop n1 br oldop =
+        if n1 <= 0 then false
+        else match str.[n1] with
+            | ')' -> loop (n1 - 1) (br - 1) oldop
+            | '(' -> loop (n1 - 1) (br + 1) oldop
+            | '+' | '-' | '*' | '/' | '^' | '=' ->
+                    if str.[n1] = c && (br > 0 || oldop = true) then true
+                    else if str.[n1] = c then loop (n1 - 1) (br - 1) true
+                    else if br > 0 then loop (n1 - 1) (br - 1) false
+                    else loop (n1 - 1) br false
+            | _ -> loop (n1 - 1) br oldop
+   in loop n 0 false
+
 let catchPower str =
-    let rec loop n pow br =
+    let rec loop n =
         if n = String.length str then ()
         else match str.[n] with
-            | '^' -> if pow = true then parseError str n "multiple power" else loop (n + 1) true br
-            | 'X' | 'x' -> if pow = true then parseError str n "X in expodential" else loop (n + 1) pow br
-            | '*' | '+' | '-' | '=' -> if br > 0 then loop (n + 1) pow br else loop (n + 1) false br
-            | '(' -> loop (n + 1) pow (br + 1)
-            | ')' -> loop (n + 1) pow (br - 1)
-            | _ -> loop (n + 1) pow br
-    in loop 0 false 0
+            | '^' -> if befBracket str n '^' = true then parseError str n "multiple power" else loop (n + 1)
+            | 'X' | 'x' -> if befBracket str n '^' = true then parseError str n "X in expodential" else loop (n + 1)
+            | _ ->  loop (n + 1)
+    in loop 0
+
+let catchDiv str =
+    let rec loop n =
+        if n = String.length str then ()
+        else match str.[n] with
+            | 'X' | 'x' -> if befBracket str n '/' = true then parseError str n "X in divition" else loop (n + 1)
+            | _ ->  loop (n + 1)
+    in loop 0
 
 let catchX str =
     let rec loop n =
@@ -95,6 +114,7 @@ let catchError str =
     catchSyntaxError str;
     catchEq str;
     catchPower str;
+    catchDiv str;
     catchBracket str;
     catchX str
 
@@ -121,9 +141,6 @@ let createNb str ns =
         | (false, _) -> new Token.token (float_of_string (String.sub str ns (n - ns))) 0 'X'
     in loop ns
 
-(* DEVELOPPEMENT *)
-(*    nb  X   sign    *)
-(* [[(u8, u8, char)]] *)
 let inverse op = match op with
     | '-' -> '+'
     | '+' -> '-'
@@ -182,44 +199,121 @@ let isCompatible x1 x2 op =
                 )
     else false
 
-let makeOp lst n =
+let makeOp lst n n1 =
     let x1 = List.nth lst n in
-    let x2 = List.nth lst (n + 1) in
-    let op = List.nth lst (n + 2) in
-    let ret = match op#getOp with
-        | '+' -> x1#add x2
-        | '-' -> x1#sub x2
-        | '*' -> x1#mult x2
-        | '/' -> x1#div x2
-        | '^' -> x1#pow x2
-        | _ -> x1#add x2
-    in
+    let x2 = List.nth lst n1 in
+    let op = List.nth lst (n1 + 1) in
+    let ret = x1#calc x2 op in
     printf "PRINT:";
     ret#display;
     printf "\n";
-    let rec loop tail n1 = match (tail, n1) with
-        | ([], _) -> []
-        | ((x::xs), 0) | ((x::xs), -1) -> loop xs (n1 - 1)
-        | ((x::xs), -2) -> [ret] @ xs
-        | ((x::xs), _) -> [x] @ loop xs (n1 - 1)
-    in loop lst n
+    let rec loop tail n2 = match tail with
+        | [] -> []
+        | (x::xs) -> (
+            if n2 = n then [ret] @ loop xs (n2 + 1)
+            else if n2 = n1 || n2 = (n1 + 1) then loop xs (n2 + 1)
+            else [x] @ loop xs (n2 + 1)
+            )
+    in loop lst 0
 
 let rec reduce lst =
     print_list lst; print_char '\n';
     let rec loop tail n = match tail with
         | [] -> lst
+        | (x::x1::x2::x3::x4::xs) -> (
+            if isCompatible x x1 x2 = true then reduce (makeOp lst n (n + 1))
+            else if isCompatible x x2 x3 = true && x1#getPrecedence = x3#getPrecedence then reduce (makeOp lst n (n + 2))
+            else if x2#getPrecedence = x4#getPrecedence && isCompatible x x3 x4 = true && x1#getOp = 'X' then reduce (makeOp lst n (n + 3))
+            else if x2#getPrecedence = x4#getPrecedence && isCompatible x1 x3 x4 = true && x#getOp = 'X' then reduce (makeOp lst (n + 1) (n + 3))
+            else loop ([x1] @ [x2] @ [x3] @ [x4] @ xs) (n + 1))
+        | (x::x1::x2::x3::xs) ->
+            if isCompatible x x2 x3 = true && x1#getPrecedence = x3#getPrecedence then reduce (makeOp lst n (n + 2))
+            else if isCompatible x x1 x2 = true then reduce (makeOp lst n (n + 1))
+            else loop ([x1] @ [x2] @ [x3] @ xs) (n + 1)
         | (x::x1::x2::xs) -> (
-            if isCompatible x x1 x2 = true then reduce (makeOp lst n)
+            if isCompatible x x1 x2 = true then reduce (makeOp lst n (n + 1))
             else loop ([x1] @ [x2] @ xs) (n + 1))
         | _ -> lst
     in loop lst 0
 
+(*IDENTITY*)
+
+let identityOneTwo lst n =
+    let rec loop tail n1 = match tail with
+        | [] -> []
+        | (x::x1::x2::x3::x4::xs) ->
+            if n1 = n then [x#calc x1 x4] @ [x#calc x2 x4] @ [x3] @ xs
+            else [x] @ loop ([x1] @ [x2] @ [x3] @ [x4] @ xs) (n1 + 1)
+        | (x::xs) -> [x] @ loop xs (n1 + 1)
+    in loop lst 0
+
+let identityTwoOne lst n =
+    let rec loop tail n1 = match tail with
+        | [] -> []
+        | (x::x1::x2::x3::x4::xs) ->
+            if n1 = n then [x3#calc x x4] @ [x3#calc x1 x4] @ [x2] @ xs
+            else [x] @ loop ([x1] @ [x2] @ [x3] @ [x4] @ xs) (n1 + 1)
+        | (x::xs) -> [x] @ loop xs (n1 + 1)
+    in loop lst 0
+
+let identityOneThree lst n =
+    let rec loop tail n1 = match tail with
+        | [] -> []
+        | (x::x1::x2::x3::x4::x5::x6::xs) ->
+            if n1 = n then [x#calc x1 x6] @ [x#calc x2 x6] @ [x3] @ [x#calc x4 x6] @ [x5] @ xs
+            else [x] @ loop ([x1] @ [x2] @ [x3] @ [x4] @ [x5] @ [x6] @ xs) (n1 + 1)
+        | (x::xs) -> [x] @ loop xs (n1 + 1)
+    in loop lst 0
+
+let identityThreeOne lst n =
+    let rec loop tail n1 = match tail with
+        | [] -> []
+        | (x::x1::x2::x3::x4::x5::x6::xs) ->
+            if n1 = n then [x5#calc x x6] @ [x5#calc x1 x6] @ [x2] @ [x5#calc x3 x6] @ [x4] @ xs
+            else [x] @ loop ([x1] @ [x2] @ [x3] @ [x4] @ [x5] @ [x6] @ xs) (n1 + 1)
+        | (x::xs) -> [x] @ loop xs (n1 + 1)
+    in loop lst 0
+
+let identityTwoTwo lst n =
+    let rec loop tail n1 = match tail with
+        | [] -> []
+        | (x::x1::x2::x3::x4::x5::x6::xs) ->
+                if n1 = n then (
+                    let op = match (x2#getOp, x5#getOp) with
+                        | ('-', '-') -> new Token.token 0. 0 '+'
+                        | ('-', '+') | ('+', '-') -> new Token.token 0. 0 '-'
+                        | _ -> x2
+                    in
+                    [x#calc x3 x6] @ [x#calc x4 x6] @ [x5] @ [x1#calc x3 x6] @ [x2] @[x1#calc x4 x6] @ [op] @ xs)
+            else [x] @ loop ([x1] @ [x2] @ [x3] @ [x4] @ [x5] @ [x6] @ xs) (n1 + 1)
+        | (x::xs) -> [x] @ loop xs (n1 + 1)
+    in loop lst 0
+
+
+(* 1-2 2-1 / 1-3 2-2 3-1 / 2-3 3-2 / 3-3 *)
+let rec identity lst =
+    print_list lst; print_char '\n';
+    let rec loop tail n = match tail with
+        | [] -> []
+        | (x::x1::x2::x3::x4::x5::x6::xs) ->
+                if x#getOp = 'X' && x1#getOp = 'X' && x2#getOp = 'X' && x3#getOp <> 'X' && x4#getOp = 'X' && x5#getOp <> 'X' && (x6#getOp = '*' || x6#getOp = '/') then identity (reduce (identityOneThree lst n))
+                else if x#getOp = 'X' && x1#getOp = 'X' && x2#getOp <> 'X' && x3#getOp = 'X' && x4#getOp <> 'X' && x5#getOp = 'X' && (x6#getOp = '*' || x6#getOp = '/') then identity (reduce (identityThreeOne lst n))
+                else if x#getOp = 'X' && x1#getOp = 'X' && x2#getOp <> 'X' && x3#getOp = 'X' && x4#getOp = 'X' && x5#getOp <> 'X' && (x6#getOp = '*' || x6#getOp = '/') then identity (reduce (identityTwoTwo lst n))
+                else loop ([x1] @ [x2] @ [x3] @ [x4] @ [x5] @ [x6] @ xs) (n + 1)
+        | (x::x1::x2::x3::x4::xs) ->
+                if isCompatible x1 x2 x3 = false && (x4#getOp = '*' || x4#getOp = '/') && x#getOp = 'X' && x1#getOp = 'X' && x2#getOp = 'X' && x3#getOp <> 'X' then identity (reduce (identityOneTwo lst n))
+                else if isCompatible x x1 x2 = false && (x4#getOp = '*' || x4#getOp = '/') && x#getOp = 'X' && x1#getOp = 'X' && x2#getOp <> 'X' && x3#getOp = 'X' then identity (reduce (identityTwoOne lst n))
+                else loop ([x1] @ [x2] @ [x3] @ [x4] @ xs) (n + 1)
+        | (x::xs) -> loop xs (n + 1)
+    in loop lst 0
+
 let makeMeSimple str =
-    let lst = reduce (poland (transformMe str)) in
+    let lst = identity (reduce (poland (transformMe str))) in
     let rec loop tail = match tail with
             | [] -> ()
             | (x::xs) -> (x#display; loop xs)
     in loop lst
+
     (*
     addMe str;
     subMe str;*)
