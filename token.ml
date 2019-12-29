@@ -1,9 +1,12 @@
 open Printf
 
+let error str =
+    print_endline ("\027[31mCalc Error:\027[0m " ^ str); exit 1
+
 let rec pow nb pw =
     if pw = 1 then nb
     else if pw = 0 then 1.
-    else if pw > 99999 then (print_endline "\027[31mCalc Error:\027[0m Power to big"; exit 1)
+    else if pw > 99999 then error "Power to big"
     else nb *. (pow nb (pw - 1))
 
 class token nb expo op =
@@ -38,7 +41,7 @@ class token nb expo op =
             if _nb *. number#getNb = 0. then new token 0. 0 _op
             else new token (_nb *. number#getNb) (_expo + number#getExpo) _op
         method div (number:token) =
-            if number#getNb = 0. then (print_endline "\027[31mCalc Error:\027[0m Divition per 0"; exit 1)
+            if number#getNb = 0. then error "Divition per 0"
             else if _nb /. number#getNb = 0. then new token 0. 0 _op
             else new token (_nb /. number#getNb) (_expo - number#getExpo) _op
         method pow (number:token) =
