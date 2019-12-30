@@ -12,7 +12,7 @@ let rec pow nb pw =
 class token nb expo op =
     object (self)
         val _nb:float = nb
-        val _expo:int = expo
+        val _expo:int = if nb = 0. then 0 else expo
 
         val _op:char = op
         val _precedence:int = match op with
@@ -30,12 +30,17 @@ class token nb expo op =
         method getOp = _op
         method getPrecedence = _precedence
         method getAssociativity = _associativity
+        method noEx = new token _nb 0 _op
 
         method add (number:token) =
-            if _nb +. number#getNb = 0. then new token 0. 0 _op
+            if _nb = 0. then new token number#getNb number#getExpo _op
+            else if number#getNb = 0. then new token _nb _expo _op
+            else if _nb +. number#getNb = 0. then new token 0. 0 _op
             else new token (_nb +. number#getNb) _expo _op
         method sub (number:token) =
-            if _nb -. number#getNb = 0. then new token 0. 0 _op
+            if _nb = 0. then new token (-.number#getNb) number#getExpo _op
+            else if number#getNb = 0. then new token _nb _expo _op
+            else if _nb -. number#getNb = 0. then new token 0. 0 _op
             else new token (_nb -. number#getNb) _expo _op
         method mult (number:token) =
             if _nb *. number#getNb = 0. then new token 0. 0 _op
@@ -60,7 +65,7 @@ class token nb expo op =
         method display = match _op with
             | 'X' -> (
                 print_float nb;
-                if expo > 0 then (print_string ("X^" ^ string_of_int expo ^ " "))
+                if expo <> 0 then (print_string ("X^" ^ string_of_int expo ^ " "))
                 else print_char ' ' )
             | _ -> (print_char _op; print_char ' ');
     end

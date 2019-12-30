@@ -8,20 +8,11 @@ CAMLOPT = ocamlopt
 
 all: $(NAME)
 
-$(NAME): opt byt
-	ln -s $(NAME).byt $(NAME)
-
-opt: $(NAME).opt
-byt: $(NAME).byt
-
 OBJS = $(SOURCES:.ml = cmo)
 OPTOBJS = $(SOURCES:.ml = cmx)
 
-$(NAME).byt: $(OBJS)
-	$(CAMLC) -o $(NAME).byt $(OBJS)
-
-$(NAME).opt: $(OPTOBJS)
-	$(CAMLOPT) -o $(NAME).opt $(OPTOBJS)
+$(NAME): $(OPTOBJS)
+	$(CAMLOPT) unix.cmxa -o $(NAME) $(OPTOBJS)
 
 .SUFFIXES:
 .SUFFIXES: .ml .mli .cmo .cmi .cmx
