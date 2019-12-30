@@ -1,5 +1,3 @@
-open Printf
-
 let isNumber = function '0' .. '9' -> true | _ -> false
 let isOp = function '*' | '+' | '-' | '=' | '^' | '/' -> true | _ -> false
 
@@ -442,9 +440,12 @@ let rec reduceMeAgain lst flags =
     print_list lst flags;
     let rec loop st n tail = match tail with
     | [] -> [List.nth lst st] @ reduceMeAgain (List.tl lst) flags
+    | (x::x1::xs) ->
+            if (List.nth lst st)#getOp <> 'X' then [List.nth lst st] @ reduceMeAgain (List.tl lst) flags
+            else if isCompatible (List.nth lst st) x x1 && n <> 0 then reduceMeAgain (makeOp lst st n) flags
+            else loop st (n + 1) ([x1] @ xs)
     | (x::xs) ->
             if (List.nth lst st)#getOp <> 'X' then [List.nth lst st] @ reduceMeAgain (List.tl lst) flags
-            else if (List.nth lst st)#getExpo = x#getExpo && x#getOp = 'X' && n <> 0 then reduceMeAgain (makeOp lst st n) flags
             else loop st (n + 1) xs
     in
     if List.length lst <= 0 then []
