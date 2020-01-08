@@ -4,11 +4,11 @@ let error str =
     print_endline ("\027[31mCalc Error:\027[0m " ^ str); exit 1
 
 let rec pow nb pw =
-    if pw = 1 then nb
-    else if pw = 0 then 1.
-    else if pw > 99999 then error "Power to big"
-    else if pw < 0 then nb *. (pow nb (pw + 1))
-    else nb *. (pow nb (pw - 1))
+    if pw = 1. then nb
+    else if pw < 1. && pw > (-1.) then 1.
+    else if pw > 99999. then error "Power to big"
+    else if pw < 0. then nb *. (pow nb (pw +. 1.))
+    else nb *. (pow nb (pw -. 1.))
 
 class token nb expo op =
     object (self)
@@ -47,13 +47,14 @@ class token nb expo op =
             if _nb *. number#getNb = 0. then new token 0. 0 _op
             else new token (_nb *. number#getNb) (_expo + number#getExpo) _op
         method div (number:token) =
-            if number#getNb = 0. then error "Divition per 0"
+            if number#getNb = 0. then error "Division per 0"
             else if _nb = infinity && number#getNb = infinity then error "Infinity divided by infinity"
             else if _nb /. number#getNb = 0. then new token 0. 0 _op
             else new token (_nb /. number#getNb) (_expo - number#getExpo) _op
         method pow (number:token) =
-            if _expo = 0 && number#getNb > 0. then new token (pow _nb (int_of_float number#getNb)) _expo _op
-            else if _expo = 0 then new token (1. /. (pow _nb (int_of_float number#getNb))) _expo _op
+            if number#getExpo <> 0 then error "x in power"
+            else if _expo = 0 && number#getNb > 0. then new token (pow _nb number#getNb) _expo _op
+            else if _expo = 0 then new token (1. /. (pow _nb number#getNb)) _expo _op
             else new token _nb (_expo * (int_of_float number#getNb)) _op
 
         method calc (number:token) (op:token) =

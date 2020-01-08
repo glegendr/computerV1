@@ -94,14 +94,6 @@ let catchPower str =
             | _ ->  loop (n + 1)
     in loop 0
 
-let catchDiv str =
-    let rec loop n =
-        if n = String.length str then ()
-        else match str.[n] with
-            | 'X' | 'x' -> if befBracket str n '/' = true then parseError str n "X in divition" else loop (n + 1)
-            | _ ->  loop (n + 1)
-    in loop 0
-
 let catchX str =
     let rec loop n =
         if n = String.length str then error ("no X founded\n" ^ str)
@@ -129,7 +121,6 @@ let catchError str flags =
     catchSyntaxError str;
     catchEq str;
     catchPower str;
-    catchDiv str;
     catchBracket str flags;
     catchX str
 
