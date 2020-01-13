@@ -7,6 +7,7 @@ let rec pow nb pw =
     if pw = 1. then nb
     else if pw < 1. && pw > (-1.) then 1.
     else if pw > 99999. then error "Power to big"
+    else if pw < (-99999.) then error "Power to small"
     else if pw < 0. then nb *. (pow nb (pw +. 1.))
     else nb *. (pow nb (pw -. 1.))
 
