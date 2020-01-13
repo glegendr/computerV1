@@ -1,5 +1,19 @@
+(* PARSING *)
+
 let isNumber = function '0' .. '9' -> true | _ -> false
 let isOp = function '*' | '+' | '-' | '=' | '^' | '/' -> true | _ -> false
+
+let rec print_list_no_nd lst flags =
+    if flags land 4 = 0 then ()
+    else match lst with
+    | [] -> ()
+    | (x::xs) -> (x#display; print_list_no_nd xs flags)
+
+let print_list lst flags =
+    if flags land 4 = 0 then ()
+    else (
+        print_list_no_nd lst flags;
+        print_char '\n')
 
 let error str =
     print_endline ("\027[31mCalc Error:\027[0m " ^ str); exit 1
@@ -20,8 +34,6 @@ let parseError str nd err =
     in
     print_endline ((loop (nd - 1)) ^ "^");
     exit 1
-
-(* PARSING *)
 
 let typeMe c =
     if isNumber c = true then 1
@@ -124,6 +136,29 @@ let catchError str flags =
     catchBracket str flags;
     catchX str
 
+let getHelp _ =
+    print_endline (Sys.argv.(0) ^ " \"equation\" [flags]");
+    print_endline "Flags are:";
+    print_endline "-b     Enable bracket  \027[31m/!\\\027[0m Warning this feature is not stable";
+    print_endline "-p     Display Reverse Polish notation at the end";
+    print_endline "-d     Display steps";
+    print_endline "-h     Display this message";
+    exit 0
+
+let getFlags flgs =
+    let rec loop n =
+        if n >= String.length flgs && n = 1 then error ("Unknown flag " ^ (String.make 1 flgs.[0]))
+        else if n >= String.length flgs then 0
+        else match flgs.[n] with
+            | 'b' -> (print_endline ("\027[33mWarning: The bracket feature can fail\027[0m "); 1 lor loop (n + 1))
+            | 'p' -> 2 lor loop (n + 1)
+            | 'd' -> 4 lor loop (n + 1)
+            | 'h' -> getHelp()
+            | '-' -> if n = 0 then loop (n + 1) else error ("Unknown flag " ^ (String.make 1 flgs.[n]))
+            | _ -> error ("Unknown flag " ^ (String.make 1 flgs.[n]))
+    in loop 0
+
+(*CALC*)
 
 let nblen str ns =
     let rec loop n = 
@@ -176,19 +211,6 @@ let rec delNb str =
 
 let delLast lst =
     List.rev (List.tl (List.rev lst))
-
-
-let rec print_list_no_nd lst flags =
-    if flags land 4 = 0 then ()
-    else match lst with
-    | [] -> ()
-    | (x::xs) -> (x#display; print_list_no_nd xs flags)
-
-let print_list lst flags =
-    if flags land 4 = 0 then ()
-    else (
-        print_list_no_nd lst flags;
-        print_char '\n')
 
 let poland lst =
     let rec loop tail op = match tail with
@@ -450,27 +472,7 @@ let makeMeSimple str flags =
         else reduce (reduceMeAgain lst2 flags) flags
     in loop 0 lst
 
-let getHelp _ =
-    print_endline (Sys.argv.(0) ^ " \"equation\" [flags]");
-    print_endline "Flags are:";
-    print_endline "-b     Enable bracket  \027[31m/!\\\027[0m Warning this feature is not stable";
-    print_endline "-p     Display Reverse Polish notation at the end";
-    print_endline "-d     Display steps";
-    print_endline "-h     Display this message";
-    exit 0
-
-let getFlags flgs =
-    let rec loop n =
-        if n >= String.length flgs && n = 1 then error ("Unknown flag " ^ (String.make 1 flgs.[0]))
-        else if n >= String.length flgs then 0
-        else match flgs.[n] with
-            | 'b' -> (print_endline ("\027[33mWarning: The bracket feature can fail\027[0m "); 1 lor loop (n + 1))
-            | 'p' -> 2 lor loop (n + 1)
-            | 'd' -> 4 lor loop (n + 1)
-            | 'h' -> getHelp()
-            | '-' -> if n = 0 then loop (n + 1) else error ("Unknown flag " ^ (String.make 1 flgs.[n]))
-            | _ -> error ("Unknown flag " ^ (String.make 1 flgs.[n]))
-    in loop 0
+(*SEC DEG*)
 
 let rec checkSecDeg lst deg = match lst with
     | [] -> deg
