@@ -56,6 +56,7 @@ class token nb expo op =
             if number#getExpo <> 0 then error "x in power"
             else if _expo = 0 && number#getNb > 0. then new token (pow _nb number#getNb) _expo _op
             else if _expo = 0 then new token (1. /. (pow _nb number#getNb)) _expo _op
+            else if number#getNb <> 0. && int_of_float number#getNb = 0 then error "Power to big"
             else new token _nb (_expo * (int_of_float number#getNb)) _op
 
         method calc (number:token) (op:token) =
